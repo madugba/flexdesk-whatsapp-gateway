@@ -67,12 +67,15 @@ Row-level security is enabled on every table with no policies, so Supabase's API
 1. Push this repo to GitHub, then **New > Blueprint** and select it. `render.yaml` defines the service.
 2. Fill the secrets Render asks for. Set `WEBHOOK_URL` to FlexDesk's `/api/webhooks/whatsapp-gateway`.
 3. Check `https://<service>.onrender.com/healthz` returns `{"status":"ok"}`.
-4. Keep it awake: Render's free plan sleeps a service after 15 minutes without a request from outside, which
-   would drop every WhatsApp connection and leave messages unanswered. The gateway asks for its own `/healthz`
-   every 10 minutes (`KEEP_ALIVE_MINUTES`), using the address Render provides in `RENDER_EXTERNAL_URL`, so there is
-   nothing to set up. It can't wake itself once asleep, so FlexDesk also pings it every 10 minutes (see
-   FlexDesk's background jobs). For a third layer, an uptime monitor on `/healthz` costs nothing. Off Render, set
-   `KEEP_ALIVE_URL` to the public address, or leave it unset to turn this off.
+4. Keep it awake: Render's free plan sleeps a service after **15 minutes** without a request from outside, which
+   would drop every WhatsApp connection and leave messages unanswered. So the gateway asks for its own `/healthz`
+   every **10 minutes** (`KEEP_ALIVE_MINUTES`, 1 to 14), using the address Render provides in `RENDER_EXTERNAL_URL`,
+   and FlexDesk pings it every 10 minutes too (it can wake the gateway if it has already gone to sleep). An uptime
+   monitor on `/healthz` is a free third layer. Off Render, set `KEEP_ALIVE_URL`, or leave it unset to turn this off.
+
+   Render's own health check (`healthCheckPath` in `render.yaml`) also requests `/healthz` every few seconds. That
+   is Render checking the service, not these pings, and as far as Render documents it does not count towards the
+   15 minutes. Those requests are deliberately not logged, so the log shows real traffic.
 
 The free plan can also restart the service at any time, and its 512 MB of memory limits you to a handful of
 sessions. Treat it as a test environment; for real schools move to a paid instance (no code changes).
