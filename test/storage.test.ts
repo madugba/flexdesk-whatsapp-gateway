@@ -155,6 +155,27 @@ test('webhooks: delivered signed, in order, with event ids; retried until accept
   }
 });
 
+test('webhooks: once delivered, the message text is no longer kept (it may be a PIN)', async () => {
+  const outbox = new WebhookOutbox(t.db);
+  await t.db.pool.query(`DELETE FROM ${t.db.table('webhook_outbox')}`);
+  const target = await receiver(() => 200);
+  const dispatcher = new WebhookDispatcher(outbox, { url: target.url, secret: TEST_WEBHOOK_SECRET }, t.logger);
+  try {
+    await outbox.enqueue('s4', 'message.received', { messageId: 'M1', chatId: 'c', text: 'my pin is GOODPIN001' });
+    const pendingRow = await t.db.pool.query(`SELECT "payload" FROM ${t.db.table('webhook_outbox')}`);
+    assert.equal(pendingRow.rows[0].payload.text, 'my pin is GOODPIN001', 'kept while undelivered, so it can be retried');
+    dispatcher.start();
+    await eventually(async () => (await outbox.stats()).pending === 0);
+    assert.ok(target.received[0]!.body.includes('GOODPIN001'), 'FlexDesk did receive it');
+    const { rows } = await t.db.pool.query(`SELECT "payload" FROM ${t.db.table('webhook_outbox')}`);
+    assert.equal(rows[0].payload.text, undefined);
+    assert.equal(rows[0].payload.messageId, 'M1', 'the rest of the record stays');
+  } finally {
+    await dispatcher.stop();
+    target.server.close();
+  }
+});
+
 test('webhooks: events wait out an outage, then go through; poison events are parked after the cap', async () => {
   const outbox = new WebhookOutbox(t.db);
   await t.db.pool.query(`DELETE FROM ${t.db.table('webhook_outbox')}`);

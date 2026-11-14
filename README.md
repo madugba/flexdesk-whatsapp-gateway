@@ -124,6 +124,7 @@ Reference implementation: `src/webhooks/signature.ts`.
 ## Operations
 
 - **Logs** are JSON. Phone numbers are masked, and message text, QR codes and credentials are never logged.
+- **Message text is not kept.** It sits in the webhook outbox only until FlexDesk has acknowledged it, then it is removed from the stored row (it can be a secret, such as a PIN).
 - **A school's number is banned or unlinked:** the session goes to `logged_out`, FlexDesk is notified, and the school links again from FlexDesk.
 - **Stuck webhook events:** `GET /v1/status` shows `webhooks.failed`; parked events are in `webhook_outbox` (`failed_at` set).
 - **Deploys:** the new instance answers health checks immediately and takes over connections as soon as the old one stops (a few seconds).
