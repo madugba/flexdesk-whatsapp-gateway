@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
+import pino from 'pino';
 import { buildServer } from '../src/http/server.js';
 import { createTestDb, type TestDb } from './helpers/db.js';
 import { TEST_API_KEY } from './helpers/env.js';
@@ -109,4 +110,19 @@ test('too many requests are throttled', async () => {
   for (let i = 0; i < 305; i++) last = (await limited.inject({ method: 'GET', url: '/healthz' })).statusCode;
   assert.equal(last, 429);
   await limited.close();
+});
+
+test('the health page is not logged (Render asks for it every few seconds), but real requests are', async () => {
+  const lines: string[] = [];
+  const logger = pino({ level: 'info' }, { write: (line: string) => { lines.push(line); } });
+  const quietApp = await buildServer({ manager: h.manager, outbox: h.outbox, isLeader: () => true, apiKeys: [TEST_API_KEY], logger: logger as unknown as typeof t.logger });
+  try {
+    for (let i = 0; i < 5; i++) assert.equal((await quietApp.inject({ method: 'GET', url: '/healthz' })).statusCode, 200);
+    assert.equal(lines.filter((line) => line.includes('/healthz')).length, 0, 'five health checks leave no trace in the log');
+
+    await quietApp.inject({ method: 'GET', url: '/v1/status', headers: auth });
+    assert.ok(lines.some((line) => line.includes('/v1/status')), 'other requests are still logged');
+  } finally {
+    await quietApp.close();
+  }
 });

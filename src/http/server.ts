@@ -55,8 +55,9 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
 
   app.setNotFoundHandler((_request, reply) => reply.status(404).send({ error: { code: 'not_found', message: 'Not found.' } }));
 
-  // Liveness only: no secrets, no database. Safe to expose and to ping.
-  app.get('/healthz', async () => ({ status: 'ok' }));
+  // Liveness only: no secrets, no database. Safe to expose and to ping. Render's own health check asks for this
+  // every few seconds, so it is not logged: a log full of identical lines hides the requests that matter.
+  app.get('/healthz', { logLevel: 'silent' }, async () => ({ status: 'ok' }));
 
   await app.register(
     async (api) => {
