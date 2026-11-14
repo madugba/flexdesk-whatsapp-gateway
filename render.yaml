@@ -1,0 +1,36 @@
+# Render blueprint. Create it with: New > Blueprint > pick this repo.
+# Secrets are marked `sync: false`, so Render asks for them in the dashboard and they never live in git.
+services:
+  - type: web
+    name: flexdesk-whatsapp-gateway
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm build
+    startCommand: node dist/main.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_SCHEMA
+        value: wa_gateway
+      - key: MAX_SESSIONS
+        value: "10"
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL_CA
+        sync: false
+      - key: GATEWAY_API_KEYS
+        sync: false
+      - key: GATEWAY_ENCRYPTION_KEY
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
