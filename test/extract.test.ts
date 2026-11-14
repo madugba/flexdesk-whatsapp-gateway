@@ -47,3 +47,22 @@ test('our own messages, groups, broadcasts, status, reactions and protocol messa
   assert.equal(extractInbound(base({ message: undefined })), null);
   assert.equal(extractInbound({ key: {} } as WAMessage), null);
 });
+
+test('messages that waited while the gateway was offline are accepted when recent, and old ones are not', async () => {
+  const { shouldAcceptUpsert, OFFLINE_MESSAGE_MAX_AGE_SECONDS } = await import('../src/engine/upsert-filter.js');
+  const now = 1_800_000_000;
+  const aged = (seconds: number) => ({ timestamp: now - seconds });
+
+  assert.equal(shouldAcceptUpsert('notify', aged(0), now), true, 'a live message');
+  assert.equal(shouldAcceptUpsert('notify', aged(3_600), now), true, 'live messages are never filtered by age here');
+
+  assert.equal(shouldAcceptUpsert('append', aged(5), now), true, 'a message that arrived as the connection came back');
+  assert.equal(shouldAcceptUpsert('append', aged(120), now), true, 'one that waited through a cold start');
+  assert.equal(shouldAcceptUpsert('append', aged(OFFLINE_MESSAGE_MAX_AGE_SECONDS), now), true, 'right at the limit');
+  assert.equal(shouldAcceptUpsert('append', aged(OFFLINE_MESSAGE_MAX_AGE_SECONDS + 1), now), false, 'too old to be worth answering');
+  assert.equal(shouldAcceptUpsert('append', aged(24 * 3_600), now), false, 'yesterday\'s message');
+  assert.equal(shouldAcceptUpsert('append', { timestamp: now + 30 }, now), true, 'a clock a little ahead of ours is not a reason to drop it');
+
+  assert.equal(shouldAcceptUpsert('prepend', aged(1), now), false, 'unknown kinds are ignored');
+  assert.equal(shouldAcceptUpsert('', aged(1), now), false);
+});

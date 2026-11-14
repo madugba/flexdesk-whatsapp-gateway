@@ -6,6 +6,7 @@ import type { LoadedAuthState, PostgresAuthStore } from './auth-state.js';
 import { classifyDisconnect } from './disconnect.js';
 import { phoneFromJid } from './jid.js';
 import { extractInbound } from './message-extract.js';
+import { shouldAcceptUpsert } from './upsert-filter.js';
 import type { Engine, EngineEvent, EngineFactory, InboundMessage, OutboundDocument } from './types.js';
 
 const RETRY_CACHE_LIMIT = 1_000;
@@ -96,10 +97,11 @@ export class BaileysEngine implements Engine {
     });
 
     socket.ev.on('messages.upsert', ({ messages, type }) => {
-      if (this.closed || type !== 'notify') return;
+      if (this.closed) return;
+      const nowSeconds = Math.floor(Date.now() / 1000);
       for (const raw of messages) {
         const message = extractInbound(raw);
-        if (message) this.emit({ type: 'message', message });
+        if (message && shouldAcceptUpsert(type, message, nowSeconds)) this.emit({ type: 'message', message });
       }
     });
   }

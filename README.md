@@ -67,8 +67,12 @@ Row-level security is enabled on every table with no policies, so Supabase's API
 1. Push this repo to GitHub, then **New > Blueprint** and select it. `render.yaml` defines the service.
 2. Fill the secrets Render asks for. Set `WEBHOOK_URL` to FlexDesk's `/api/webhooks/whatsapp-gateway`.
 3. Check `https://<service>.onrender.com/healthz` returns `{"status":"ok"}`.
-4. Keep it awake: Render's free plan sleeps a service after 15 minutes without inbound traffic, which
-   would drop every WhatsApp connection. Ping `/healthz` **every 10 minutes** (a Hostinger cron job or an uptime monitor).
+4. Keep it awake: Render's free plan sleeps a service after 15 minutes without a request from outside, which
+   would drop every WhatsApp connection and leave messages unanswered. The gateway asks for its own `/healthz`
+   every 10 minutes (`KEEP_ALIVE_MINUTES`), using the address Render provides in `RENDER_EXTERNAL_URL`, so there is
+   nothing to set up. It can't wake itself once asleep, so FlexDesk also pings it every 10 minutes (see
+   FlexDesk's background jobs). For a third layer, an uptime monitor on `/healthz` costs nothing. Off Render, set
+   `KEEP_ALIVE_URL` to the public address, or leave it unset to turn this off.
 
 The free plan can also restart the service at any time, and its 512 MB of memory limits you to a handful of
 sessions. Treat it as a test environment; for real schools move to a paid instance (no code changes).
@@ -104,6 +108,10 @@ and the `%PDF-` header, not just the declared type), with a plain file name endi
 bytes in the request rather than fetched from a URL, so the gateway can never be pointed at an address of someone
 else's choosing. It is held in memory for the send and never stored or logged. Only this route accepts a body larger
 than 64 KB.
+
+**Messages that arrive while the gateway is away.** WhatsApp holds a message for a linked device that is offline
+and hands it over on reconnect. These are passed on like any other, as long as they are less than 15 minutes old;
+older ones are skipped so a long outage can't set off a flood of late replies.
 
 Always reply to the `chatId` from the webhook. WhatsApp may identify a person by an opaque id instead of a phone
 number, in which case `phone` is `null` and only `chatId` works.

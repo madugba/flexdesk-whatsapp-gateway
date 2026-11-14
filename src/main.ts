@@ -1,4 +1,5 @@
-import { loadConfig } from './config.js';
+import { keepAliveUrl, loadConfig } from './config.js';
+import { KeepAlive } from './keep-alive.js';
 import { createDatabase } from './db/database.js';
 import { LeaderLock } from './db/leader-lock.js';
 import { migrate } from './db/migrate.js';
@@ -64,6 +65,11 @@ async function main(): Promise<void> {
   await app.listen({ port: config.PORT, host: '0.0.0.0' });
   leader.start();
 
+  const awakeUrl = keepAliveUrl(config);
+  const keepAlive = awakeUrl ? new KeepAlive({ url: awakeUrl, intervalMs: config.KEEP_ALIVE_MINUTES * 60_000 }, logger) : null;
+  keepAlive?.start();
+  logger.info({ keepAlive: keepAlive ? `every ${config.KEEP_ALIVE_MINUTES} minutes` : 'off' }, 'Keep-alive');
+
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
@@ -76,6 +82,7 @@ async function main(): Promise<void> {
     force.unref();
 
     await app.close().catch((error: unknown) => logger.error({ error }, 'Closing the HTTP server failed'));
+    keepAlive?.stop();
     maintenance.stop();
     await dispatcher.stop();
     await manager.deactivate();
