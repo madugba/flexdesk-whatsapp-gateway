@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { reconnectDelayMs } from '../engine/disconnect.js';
 import { parseRecipient, phoneToJid } from '../engine/jid.js';
-import type { Engine, EngineEvent, EngineFactory, InboundMessage, SessionStatus } from '../engine/types.js';
+import type { Engine, EngineEvent, EngineFactory, InboundMessage, OutboundDocument, SessionStatus } from '../engine/types.js';
 import { errors, GatewayError } from '../lib/errors.js';
 import type { Logger } from '../lib/logger.js';
 import { maskPhone } from '../lib/logger.js';
@@ -198,11 +198,26 @@ export class SessionManager {
     await this.deps.repository.delete(sessionId);
   }
 
-  async send(
+  /** Sends a text message to someone who has messaged this number within the reply window. */
+  send(sessionId: string, to: string, text: string, idempotencyKey: string | undefined): Promise<{ messageId: string; chatId: string }> {
+    return this.sendGuarded(sessionId, to, idempotencyKey, (runtime, chatId) => this.deliverText(runtime, chatId, text));
+  }
+
+  /** Same guards as `send` -- reply window, idempotency, the paced queue -- for a file. */
+  sendDocument(
     sessionId: string,
     to: string,
-    text: string,
+    document: OutboundDocument,
     idempotencyKey: string | undefined,
+  ): Promise<{ messageId: string; chatId: string }> {
+    return this.sendGuarded(sessionId, to, idempotencyKey, (runtime, chatId) => this.deliverDocument(runtime, chatId, document));
+  }
+
+  private async sendGuarded(
+    sessionId: string,
+    to: string,
+    idempotencyKey: string | undefined,
+    deliver: (runtime: Runtime, chatId: string) => Promise<{ messageId: string }>,
   ): Promise<{ messageId: string; chatId: string }> {
     this.requireActive();
     const runtime = this.runtimes.get(sessionId);
@@ -226,7 +241,7 @@ export class SessionManager {
     }
 
     try {
-      const sent = await runtime.queue.run(() => this.deliver(runtime, recipient.jid, text));
+      const sent = await runtime.queue.run(() => deliver(runtime, recipient.jid));
       await this.deps.repository.completeSend(sessionId, key, sent.messageId);
       return { messageId: sent.messageId, chatId: recipient.jid };
     } catch (error) {
@@ -237,17 +252,26 @@ export class SessionManager {
     }
   }
 
-  private async deliver(runtime: Runtime, chatId: string, text: string): Promise<{ messageId: string }> {
+  /** Shows "typing..." for a moment first, the way a person would, then sends. */
+  private async withTyping(runtime: Runtime, chatId: string, typingMs: number, send: (engine: Engine) => Promise<{ messageId: string }>) {
     const engine = runtime.engine;
     if (!engine || runtime.status !== 'open') throw errors.sessionNotOpen(runtime.status);
 
     await engine.sendPresence(chatId, 'composing').catch(() => undefined);
-    await this.sleep(Math.min(3_000, 300 + text.length * 25) * (0.8 + this.random() * 0.4));
+    await this.sleep(typingMs * (0.8 + this.random() * 0.4));
     try {
-      return await engine.sendText(chatId, text);
+      return await send(engine);
     } finally {
       await engine.sendPresence(chatId, 'paused').catch(() => undefined);
     }
+  }
+
+  private deliverText(runtime: Runtime, chatId: string, text: string) {
+    return this.withTyping(runtime, chatId, Math.min(3_000, 300 + text.length * 25), (engine) => engine.sendText(chatId, text));
+  }
+
+  private deliverDocument(runtime: Runtime, chatId: string, document: OutboundDocument) {
+    return this.withTyping(runtime, chatId, 1_200, (engine) => engine.sendDocument(chatId, document));
   }
 
   private startRuntime(sessionId: string, row: SessionRow | null): Runtime {

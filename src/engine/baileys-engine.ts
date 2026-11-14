@@ -6,7 +6,7 @@ import type { LoadedAuthState, PostgresAuthStore } from './auth-state.js';
 import { classifyDisconnect } from './disconnect.js';
 import { phoneFromJid } from './jid.js';
 import { extractInbound } from './message-extract.js';
-import type { Engine, EngineEvent, EngineFactory, InboundMessage } from './types.js';
+import type { Engine, EngineEvent, EngineFactory, InboundMessage, OutboundDocument } from './types.js';
 
 const RETRY_CACHE_LIMIT = 1_000;
 
@@ -123,6 +123,18 @@ export class BaileysEngine implements Engine {
 
   async sendText(chatId: string, text: string): Promise<{ messageId: string }> {
     const sent = await this.requireSocket().sendMessage(chatId, { text });
+    const messageId = sent?.key.id;
+    if (!messageId) throw new Error('WhatsApp did not return a message id');
+    return { messageId };
+  }
+
+  async sendDocument(chatId: string, document: OutboundDocument): Promise<{ messageId: string }> {
+    const sent = await this.requireSocket().sendMessage(chatId, {
+      document: document.data,
+      mimetype: document.mimeType,
+      fileName: document.fileName,
+      ...(document.caption ? { caption: document.caption } : {}),
+    });
     const messageId = sent?.key.id;
     if (!messageId) throw new Error('WhatsApp did not return a message id');
     return { messageId };

@@ -41,11 +41,20 @@ export type EngineEvent =
   | { type: 'close'; code: number | undefined; reason: string; disposition: DisconnectDisposition }
   | { type: 'message'; message: InboundMessage };
 
+/** A file to send. Held in memory only; the gateway never stores it. */
+export interface OutboundDocument {
+  data: Buffer;
+  fileName: string;
+  mimeType: 'application/pdf';
+  caption?: string;
+}
+
 export interface Engine {
   start(): Promise<void>;
   onEvent(listener: (event: EngineEvent) => void): void;
   sendPresence(chatId: string, presence: 'composing' | 'paused'): Promise<void>;
   sendText(chatId: string, text: string): Promise<{ messageId: string }>;
+  sendDocument(chatId: string, document: OutboundDocument): Promise<{ messageId: string }>;
   markRead(message: Pick<InboundMessage, 'messageId' | 'chatId'>): Promise<void>;
   /** Unlinks the device at WhatsApp. */
   logout(): Promise<void>;

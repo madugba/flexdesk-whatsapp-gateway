@@ -87,6 +87,7 @@ Errors are `{ "error": { "code": "...", "message": "..." } }`.
 | `POST` | `/v1/sessions/:id/reconnect` | New connection and fresh QR after `qr_expired`, `replaced`, `error` or `logged_out`. |
 | `DELETE` | `/v1/sessions/:id` | Unlink the device and delete everything stored. |
 | `POST` | `/v1/sessions/:id/messages` | `{ "to", "text", "idempotencyKey"? }`. `to` is a chat id from a webhook (preferred) or a phone number in international digits. |
+| `POST` | `/v1/sessions/:id/documents` | `{ "to", "fileName", "mimeType": "application/pdf", "data", "caption"?, "idempotencyKey"? }`. `data` is the file, base64-encoded. See below. |
 | `GET` | `/v1/status` | Leader state, session count, outbox backlog, memory. |
 | `GET` | `/healthz` | Public liveness check. |
 
@@ -95,6 +96,14 @@ Session ids are 8 to 64 characters of letters, digits, `_` and `-`. Statuses:
 
 **The QR string is a credential**: anyone holding it while it is valid can link the account. FlexDesk must show it
 only to the institution's own admin, render it client-side, and never log or store it.
+
+**Sending a file.** Documents go through exactly the same guards as text: the person must have messaged within the
+reply window, the send is paced by the same queue and hourly cap, and an `idempotencyKey` makes a retry return the
+original message instead of sending the file twice. Only PDFs are accepted, up to 5 MB (checked on the decoded bytes
+and the `%PDF-` header, not just the declared type), with a plain file name ending in `.pdf`. The file is sent as
+bytes in the request rather than fetched from a URL, so the gateway can never be pointed at an address of someone
+else's choosing. It is held in memory for the send and never stored or logged. Only this route accepts a body larger
+than 64 KB.
 
 Always reply to the `chatId` from the webhook. WhatsApp may identify a person by an opaque id instead of a phone
 number, in which case `phone` is `null` and only `chatId` works.

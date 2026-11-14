@@ -6,6 +6,7 @@ import type { Logger } from '../lib/logger.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import type { WebhookOutbox } from '../webhooks/outbox.js';
 import { createApiKeyVerifier } from './api-key-auth.js';
+import { decodeDocument, documentBody, MAX_DOCUMENT_REQUEST_BYTES } from './document-body.js';
 
 export interface ServerDeps {
   manager: SessionManager;
@@ -89,6 +90,11 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       api.post<{ Params: { id: string } }>('/sessions/:id/messages', async (request) => {
         const body = messageBody.parse(request.body);
         return deps.manager.send(request.params.id, body.to, body.text, body.idempotencyKey);
+      });
+      // Only this route accepts a large body; everything else keeps the small default.
+      api.post<{ Params: { id: string } }>('/sessions/:id/documents', { bodyLimit: MAX_DOCUMENT_REQUEST_BYTES }, async (request) => {
+        const body = documentBody.parse(request.body);
+        return deps.manager.sendDocument(request.params.id, body.to, decodeDocument(body), body.idempotencyKey);
       });
     },
     { prefix: '/v1' },
