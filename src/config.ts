@@ -29,6 +29,11 @@ const envSchema = z.object({
   SEND_MAX_PER_HOUR: z.coerce.number().int().min(1).default(300),
   SEND_MAX_QUEUE: z.coerce.number().int().min(1).default(50),
   MARK_READ: boolean.default(true),
+  /** This service's own public address, for keeping itself awake. Render sets RENDER_EXTERNAL_URL by itself. */
+  KEEP_ALIVE_URL: z.url().optional(),
+  RENDER_EXTERNAL_URL: z.url().optional(),
+  /** Under Render's 15-minute sleep timeout. */
+  KEEP_ALIVE_MINUTES: z.coerce.number().int().min(1).max(14).default(10),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -47,4 +52,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error('Invalid configuration:\n  WEBHOOK_URL: must use https in production');
   }
   return config;
+}
+
+/** Where the service should ask for itself to stay awake, or null when it isn't on a host that sleeps it. */
+export function keepAliveUrl(config: Config): string | null {
+  return config.KEEP_ALIVE_URL ?? config.RENDER_EXTERNAL_URL ?? null;
 }
