@@ -31,6 +31,8 @@ export interface SessionView {
 export interface SessionManagerOptions {
   maxSessions: number;
   replyWindowHours: number;
+  /** The longest window a single send may ask for. */
+  maxReplyWindowHours: number;
   markRead: boolean;
   send: { minIntervalMs: number; maxPerHour: number; maxQueued: number };
 }
@@ -198,9 +200,19 @@ export class SessionManager {
     await this.deps.repository.delete(sessionId);
   }
 
-  /** Sends a text message to someone who has messaged this number within the reply window. */
-  send(sessionId: string, to: string, text: string, idempotencyKey: string | undefined): Promise<{ messageId: string; chatId: string }> {
-    return this.sendGuarded(sessionId, to, idempotencyKey, (runtime, chatId) => this.deliverText(runtime, chatId, text));
+  /**
+   * Sends a text message to someone who has messaged this number within the reply window. A send may ask for a longer
+   * window (up to the configured maximum) when it answers something that took a while, such as a complaint; the person
+   * must still have written in within that time, so this is never a message to a stranger.
+   */
+  send(
+    sessionId: string,
+    to: string,
+    text: string,
+    idempotencyKey: string | undefined,
+    replyWindowHours?: number,
+  ): Promise<{ messageId: string; chatId: string }> {
+    return this.sendGuarded(sessionId, to, idempotencyKey, (runtime, chatId) => this.deliverText(runtime, chatId, text), replyWindowHours);
   }
 
   /** Same guards as `send` -- reply window, idempotency, the paced queue -- for a file. */
@@ -218,6 +230,7 @@ export class SessionManager {
     to: string,
     idempotencyKey: string | undefined,
     deliver: (runtime: Runtime, chatId: string) => Promise<{ messageId: string }>,
+    requestedWindowHours?: number,
   ): Promise<{ messageId: string; chatId: string }> {
     this.requireActive();
     const runtime = this.runtimes.get(sessionId);
@@ -230,7 +243,9 @@ export class SessionManager {
     const recipient = parseRecipient(to);
     if (!recipient) throw errors.invalidRecipient();
     const windowJids = recipient.phone ? [recipient.jid, phoneToJid(recipient.phone)] : [recipient.jid];
-    const since = new Date(this.now() - this.deps.options.replyWindowHours * 3_600_000);
+    const { replyWindowHours, maxReplyWindowHours } = this.deps.options;
+    const windowHours = Math.min(Math.max(requestedWindowHours ?? replyWindowHours, replyWindowHours), maxReplyWindowHours);
+    const since = new Date(this.now() - windowHours * 3_600_000);
     if (!(await this.deps.repository.hasOpenWindow(sessionId, windowJids, since))) throw errors.outsideReplyWindow();
 
     const key = idempotencyKey ?? randomUUID();

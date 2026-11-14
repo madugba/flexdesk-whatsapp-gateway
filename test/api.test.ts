@@ -126,3 +126,15 @@ test('the health page is not logged (Render asks for it every few seconds), but 
     await quietApp.close();
   }
 });
+
+test('replyWindowHours is validated: whole hours from 1 to 168 only', async () => {
+  for (const replyWindowHours of [0, 169, 24.5, -3, '72', null, 100_000]) {
+    const response = await call('POST', '/v1/sessions/missing-0001/messages', { to: '2348012345678', text: 'x', replyWindowHours });
+    assert.equal(response.statusCode, 422, JSON.stringify(replyWindowHours));
+    assert.equal(response.json().error.code, 'invalid_request');
+  }
+  for (const replyWindowHours of [1, 72, 168]) {
+    const response = await call('POST', '/v1/sessions/missing-0001/messages', { to: '2348012345678', text: 'x', replyWindowHours });
+    assert.equal(response.statusCode, 404, `${replyWindowHours}: accepted, then the missing session is what fails`);
+  }
+});

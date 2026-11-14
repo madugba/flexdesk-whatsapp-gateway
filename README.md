@@ -93,7 +93,7 @@ Errors are `{ "error": { "code": "...", "message": "..." } }`.
 | `GET` | `/v1/sessions` | All sessions (never includes QR codes). |
 | `POST` | `/v1/sessions/:id/reconnect` | New connection and fresh QR after `qr_expired`, `replaced`, `error` or `logged_out`. |
 | `DELETE` | `/v1/sessions/:id` | Unlink the device and delete everything stored. |
-| `POST` | `/v1/sessions/:id/messages` | `{ "to", "text", "idempotencyKey"? }`. `to` is a chat id from a webhook (preferred) or a phone number in international digits. |
+| `POST` | `/v1/sessions/:id/messages` | `{ "to", "text", "idempotencyKey"?, "replyWindowHours"? }`. `to` is a chat id from a webhook (preferred) or a phone number in international digits. |
 | `POST` | `/v1/sessions/:id/documents` | `{ "to", "fileName", "mimeType": "application/pdf", "data", "caption"?, "idempotencyKey"? }`. `data` is the file, base64-encoded. See below. |
 | `GET` | `/v1/status` | Leader state, session count, outbox backlog, memory. |
 | `GET` | `/healthz` | Public liveness check. |
@@ -103,6 +103,11 @@ Session ids are 8 to 64 characters of letters, digits, `_` and `-`. Statuses:
 
 **The QR string is a credential**: anyone holding it while it is valid can link the account. FlexDesk must show it
 only to the institution's own admin, render it client-side, and never log or store it.
+
+**A reply that took a while.** A send may pass `replyWindowHours` (1 to 168) to reach someone who wrote in longer ago
+than the usual 24 hours, for example a school's answer to a complaint that took a few days. It never shortens the
+default and is capped by `MAX_REPLY_WINDOW_HOURS` (default 168, because who has written in is only remembered for 7
+days). The person must still have written to the number within that time, so a stranger can never be reached.
 
 **Sending a file.** Documents go through exactly the same guards as text: the person must have messaged within the
 reply window, the send is paced by the same queue and hourly cap, and an `idempotencyKey` makes a retry return the

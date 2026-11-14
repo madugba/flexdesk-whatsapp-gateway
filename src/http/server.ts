@@ -22,6 +22,8 @@ const messageBody = z
     to: z.string().min(1).max(64),
     text: z.string().min(1).max(4096),
     idempotencyKey: z.string().min(8).max(128).optional(),
+    /** For a reply that took a while: how far back the person may have written. Never below the default, never above the configured maximum. */
+    replyWindowHours: z.number().int().min(1).max(168).optional(),
   })
   .strict();
 
@@ -90,7 +92,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       });
       api.post<{ Params: { id: string } }>('/sessions/:id/messages', async (request) => {
         const body = messageBody.parse(request.body);
-        return deps.manager.send(request.params.id, body.to, body.text, body.idempotencyKey);
+        return deps.manager.send(request.params.id, body.to, body.text, body.idempotencyKey, body.replyWindowHours);
       });
       // Only this route accepts a large body; everything else keeps the small default.
       api.post<{ Params: { id: string } }>('/sessions/:id/documents', { bodyLimit: MAX_DOCUMENT_REQUEST_BYTES }, async (request) => {
