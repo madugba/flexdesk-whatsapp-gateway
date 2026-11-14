@@ -1,4 +1,4 @@
-import type { Engine, EngineEvent, EngineFactory, InboundMessage } from '../../src/engine/types.js';
+import type { Engine, EngineEvent, EngineFactory, InboundMessage, OutboundDocument } from '../../src/engine/types.js';
 
 export class FakeEngine implements Engine {
   listener: (event: EngineEvent) => void = () => undefined;
@@ -6,6 +6,7 @@ export class FakeEngine implements Engine {
   stopped = false;
   loggedOut = false;
   sent: Array<{ chatId: string; text: string }> = [];
+  documents: Array<{ chatId: string; document: OutboundDocument }> = [];
   presences: string[] = [];
   read: string[] = [];
   failNextSend = false;
@@ -29,6 +30,14 @@ export class FakeEngine implements Engine {
     }
     this.sent.push({ chatId, text });
     return { messageId: `${this.sessionId}-out-${++this.counter}` };
+  }
+  async sendDocument(chatId: string, document: OutboundDocument) {
+    if (this.failNextSend) {
+      this.failNextSend = false;
+      throw new Error('boom');
+    }
+    this.documents.push({ chatId, document });
+    return { messageId: `${this.sessionId}-doc-${++this.counter}` };
   }
   async markRead(message: Pick<InboundMessage, 'messageId'>) {
     this.read.push(message.messageId);

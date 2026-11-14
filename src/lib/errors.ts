@@ -20,6 +20,7 @@ export const errors = {
     new GatewayError('invalid_recipient', 'Recipient must be a phone number in international digits or a chat id from a webhook.', 422),
   outsideReplyWindow: () =>
     new GatewayError('outside_reply_window', 'This person has not messaged within the reply window, so they cannot be messaged.', 422),
+  invalidDocument: (reason: string) => new GatewayError('invalid_document', reason, 422),
   queueFull: () => new GatewayError('queue_full', 'Too many messages are waiting to be sent for this session.', 429, 10),
   rateLimited: () => new GatewayError('rate_limited', 'This session reached its hourly sending limit.', 429, 300),
   duplicateInFlight: () => new GatewayError('duplicate_in_flight', 'A message with this idempotency key is still being sent.', 409, 2),
