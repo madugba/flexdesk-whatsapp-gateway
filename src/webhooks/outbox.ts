@@ -59,9 +59,15 @@ export class WebhookOutbox {
       .sort((a, b) => Number(a.id) - Number(b.id));
   }
 
+  /**
+   * Once FlexDesk has the event, the message text is removed from the stored copy. The text can be a secret (a person
+   * sends an e-checker PIN), and the gateway has no reason to keep it: the row stays only for delivery statistics.
+   */
   async markDelivered(id: string): Promise<void> {
     await this.db.pool.query(
-      `UPDATE ${this.db.table('webhook_outbox')} SET "delivered_at" = now(), "attempts" = "attempts" + 1, "last_error" = NULL WHERE "id" = $1`,
+      `UPDATE ${this.db.table('webhook_outbox')}
+       SET "delivered_at" = now(), "attempts" = "attempts" + 1, "last_error" = NULL, "payload" = "payload" - 'text'
+       WHERE "id" = $1`,
       [id],
     );
   }
