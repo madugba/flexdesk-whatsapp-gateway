@@ -19,6 +19,7 @@ export function createManager(t: TestDb, overrides: Partial<ConstructorParameter
     options: {
       maxSessions: 3,
       replyWindowHours: 24,
+      maxReplyWindowHours: 168,
       markRead: true,
       send: { minIntervalMs: 0, maxPerHour: 100, maxQueued: 10 },
       ...overrides,

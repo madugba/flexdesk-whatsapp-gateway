@@ -25,6 +25,8 @@ const envSchema = z.object({
   WEBHOOK_SECRET: z.string().min(32, 'must be at least 32 characters'),
   MAX_SESSIONS: z.coerce.number().int().min(1).max(500).default(20),
   REPLY_WINDOW_HOURS: z.coerce.number().min(1).max(72).default(24),
+  /** The most a single send may ask for, e.g. a reply to a complaint that took days. The record of who has written in is kept for 7 days, so more is pointless. */
+  MAX_REPLY_WINDOW_HOURS: z.coerce.number().min(24).max(168).default(168),
   SEND_MIN_INTERVAL_MS: z.coerce.number().int().min(0).default(1500),
   SEND_MAX_PER_HOUR: z.coerce.number().int().min(1).default(300),
   SEND_MAX_QUEUE: z.coerce.number().int().min(1).default(50),

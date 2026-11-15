@@ -269,3 +269,30 @@ test('a failure to start a connection is retried instead of leaving the session 
   h.engines.failCreate = false;
   await eventually(() => h.engines.created.length === 1);
 });
+
+test('a reply that took a while may ask for a longer window, up to a cap, and never reaches someone who has not written in', async () => {
+  const engine = await openSession();
+  engine.emit(incoming('MSG1'));
+  await eventually(async () => (await h.events('message.received')).length === 1);
+
+  h.clock.now += 50 * 3_600_000; // two days later
+  await assert.rejects(h.manager.send('school-0001', PHONE, 'late', undefined), (e: { code?: string }) => e.code === 'outside_reply_window', 'the default window has closed');
+  await assert.rejects(h.manager.send('school-0001', PHONE, 'late', undefined, 24), (e: { code?: string }) => e.code === 'outside_reply_window', 'asking for the default is no different');
+  const longer = await h.manager.send('school-0001', PHONE, 'Your complaint has a reply', undefined, 72);
+  assert.ok(longer.messageId, 'a 72-hour window reaches someone who wrote 50 hours ago');
+  assert.equal(engine.sent.at(-1)!.text, 'Your complaint has a reply');
+
+  h.clock.now += 6 * 24 * 3_600_000; // about eight days after they wrote
+  await assert.rejects(h.manager.send('school-0001', PHONE, 'too late', undefined, 168), (e: { code?: string }) => e.code === 'outside_reply_window', 'even the longest window ends');
+  await assert.rejects(h.manager.send('school-0001', '2348099999999', 'x', undefined, 168), (e: { code?: string }) => e.code === 'outside_reply_window', 'a stranger is never reachable, whatever window is asked for');
+});
+
+test('a request cannot widen the window past the configured maximum, or shrink it below the default', async () => {
+  const engine = await openSession();
+  engine.emit(incoming('MSG1'));
+  await eventually(async () => (await h.events('message.received')).length === 1);
+  h.clock.now += 10 * 3_600_000;
+  assert.ok((await h.manager.send('school-0001', PHONE, 'inside the default', undefined, 1)).messageId, 'asking for less than the default does not close a window that is still open');
+  h.clock.now += 8 * 24 * 3_600_000;
+  await assert.rejects(h.manager.send('school-0001', PHONE, 'x', undefined, 168), (e: { code?: string }) => e.code === 'outside_reply_window');
+});

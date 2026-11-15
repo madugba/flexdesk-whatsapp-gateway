@@ -36,6 +36,7 @@ async function main(): Promise<void> {
     options: {
       maxSessions: config.MAX_SESSIONS,
       replyWindowHours: config.REPLY_WINDOW_HOURS,
+      maxReplyWindowHours: config.MAX_REPLY_WINDOW_HOURS,
       markRead: config.MARK_READ,
       send: { minIntervalMs: config.SEND_MIN_INTERVAL_MS, maxPerHour: config.SEND_MAX_PER_HOUR, maxQueued: config.SEND_MAX_QUEUE },
     },
